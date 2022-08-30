@@ -1,4 +1,12 @@
 /**
+ *
+ * Copyright (C) 2022 Roberto Cazzaro <https://github.com/robcazzaro>
+ * 
+ * Bosch BHY2 libraries ported to nRF5 SDK (17.1.0)
+ *
+ *
+ *
+ *
  * Copyright (c) 2020 Bosch Sensortec GmbH. All rights reserved.
  *
  * BSD-3-Clause
@@ -36,75 +44,25 @@
  *
  */
 
-#include "common.h"
+#include "mcommon.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-#include <stdlib.h>
+#include "nrf_delay.h"
+#include "nrfx_spim.h"
+#include "nrf_gpio.h"
+
+#include "nrf_log.h"
+#include "nrf_log_ctrl.h"
+#include "nrf_log_default_backends.h"
 
 #include "bhy2_parse.h"
 #include "bhy2.h"
 
-#include "coines.h"
-
 #define BHA260_SHUTTLE_ID 0x139
 #define BHI260_SHUTTLE_ID 0x119
 
-bool get_interrupt_status(void)
-{
-    enum coines_pin_direction pin_direction = COINES_PIN_DIRECTION_IN;
-    enum coines_pin_value pin_value = COINES_PIN_VALUE_LOW;
-
-    coines_get_pin_config(BHY260_INT_PIN, &pin_direction, &pin_value);
-
-    return (pin_value == COINES_PIN_VALUE_HIGH) ? true : false;
-}
-
-char* get_coines_error(int16_t rslt)
-{
-    char *ret = " ";
-
-    switch (rslt)
-    {
-        case COINES_SUCCESS:
-            break;
-        case COINES_E_FAILURE:
-            ret = "[COINES Error] Generic failure";
-            break;
-        case COINES_E_COMM_IO_ERROR:
-            ret = "[COINES Error] Communication IO failed. Check connections with the sensor";
-            break;
-        case COINES_E_COMM_INIT_FAILED:
-            ret = "[COINES Error] Communication initialization failed";
-            break;
-        case COINES_E_UNABLE_OPEN_DEVICE:
-            ret = "[COINES Error] Unable to open device. Check if the board is in use";
-            break;
-        case COINES_E_DEVICE_NOT_FOUND:
-            ret = "[COINES Error] Device not found. Check if the board is powered on";
-            break;
-        case COINES_E_UNABLE_CLAIM_INTF:
-            ret = "[COINES Error] Unable to claim interface. Check if the board is in use";
-            break;
-        case COINES_E_MEMORY_ALLOCATION:
-            ret = "[COINES Error] Error allocating memory";
-            break;
-        case COINES_E_NOT_SUPPORTED:
-            ret = "[COINES Error] Feature not supported";
-            break;
-        case COINES_E_NULL_PTR:
-            ret = "[COINES Error] Null pointer error";
-            break;
-        case COINES_E_COMM_WRONG_RESPONSE:
-            ret = "[COINES Error] Unexpected response";
-            break;
-        default:
-            ret = "[COINES Error] Unknown error code";
-    }
-
-    return ret;
-}
+// SPI instance
+#define SPI_INSTANCE_ID       1
+static const nrfx_spim_t m_spi = NRFX_SPIM_INSTANCE(SPI_INSTANCE_ID);   // Control block for the SPI instance
 
 char* get_api_error(int8_t error_code)
 {
@@ -148,97 +106,117 @@ char* get_api_error(int8_t error_code)
     return ret;
 }
 
-void setup_interfaces(bool reset_power, enum bhy2_intf intf)
+void setup_SPI(void)
 {
-    int16_t coines_rslt = coines_open_comm_intf(COINES_COMM_INTF_USB);
-    enum coines_pin_direction pin_direction = COINES_PIN_DIRECTION_IN;
-    enum coines_pin_value pin_value = COINES_PIN_VALUE_LOW;
+    nrfx_spim_config_t spim_config = NRFX_SPIM_DEFAULT_CONFIG;
 
-    if (coines_rslt)
-    {
-        printf("%s\n", get_coines_error(coines_rslt));
-    }
+    spim_config.ss_pin    = BSP_MEMS_CS;
+    spim_config.miso_pin  = BSP_SPI_MISO;
+    spim_config.mosi_pin  = BSP_SPI_MOSI;
+    spim_config.sck_pin   = BSP_SPI_CLK;
 
-    struct coines_board_info board_info;
-    coines_rslt = coines_get_board_info(&board_info);
-    if (coines_rslt == COINES_SUCCESS)
-    {
-        if (BHA260_SHUTTLE_ID == board_info.shuttle_id)
-        {
-            /*printf("Found BHA260 Shuttle\n"); */
-        }
-        else if (BHI260_SHUTTLE_ID == board_info.shuttle_id)
-        {
-            /*printf("Found BHI260 Shuttle\n"); */
-        }
-        else
-        {
-            /*printf("Expecting a BHA260 or BHI260 shuttle\n"); */
-        }
-    }
-    else
-    {
-        printf("%s\r\n", get_coines_error(coines_rslt));
-    }
+    spim_config.bit_order = NRF_SPIM_BIT_ORDER_MSB_FIRST;
+    spim_config.frequency = NRF_SPIM_FREQ_8M;
+    spim_config.mode      = NRF_SPIM_MODE_0;
 
-    if (reset_power)
-    {
-        coines_set_shuttleboard_vdd_vddio_config(0, 0);
-        coines_delay_msec(10);
-    }
+    APP_ERROR_CHECK(nrfx_spim_init(&m_spi, &spim_config, NULL, NULL));
 
-    if (intf == BHY2_SPI_INTERFACE)
-    {
-        coines_config_spi_bus(COINES_SPI_BUS_0, COINES_SPI_SPEED_1_MHZ, COINES_SPI_MODE0);
-    }
-    else
-    {
-        coines_config_i2c_bus(COINES_I2C_BUS_0, COINES_I2C_FAST_MODE);
-    }
-    coines_set_shuttleboard_vdd_vddio_config(1800, 1800);
-
-    coines_set_pin_config(BHY260_INT_PIN, pin_direction, pin_value);
-
-    coines_delay_msec(10);
 }
 
-void close_interfaces(void)
-{
-    coines_close_comm_intf(COINES_COMM_INTF_USB);
-}
 
 int8_t bhy2_spi_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     (void)intf_ptr;
 
-    return coines_read_spi(BHY260_CS_PIN, reg_addr, reg_data, (uint16_t)length);
+    uint8_t m_tx_buf[1];
+    uint8_t m_rx_buf[length + 1];
+    size_t s_tx_buf = sizeof(m_tx_buf);
+    size_t s_rx_buf = sizeof(m_rx_buf);
+
+    volatile uint32_t * p_spim_event_end = (uint32_t *) nrfx_spim_end_event_get(&m_spi);
+
+    // Initialize buffers
+    memset(reg_data, 0xff, length);
+    memset(m_tx_buf,     0xff, s_tx_buf);
+    memset(m_rx_buf,     0xff, s_rx_buf);
+
+    m_tx_buf[0] = reg_addr | 0x80;  // Read
+
+    nrfx_spim_xfer_desc_t xfer_desc = NRFX_SPIM_XFER_TRX(m_tx_buf, s_tx_buf, m_rx_buf, s_rx_buf);
+
+    int err_code = nrfx_spim_xfer(&m_spi, &xfer_desc, NRFX_SPIM_FLAG_NO_XFER_EVT_HANDLER);
+    APP_ERROR_CHECK(err_code);
+
+    if (err_code == NRF_SUCCESS)
+    {
+      while (*p_spim_event_end == 0)
+                {};
+      *p_spim_event_end = 0; 
+    }
+    // The driver doesn't release the ss_pin
+    // So we need to do it ourselves here to tell the chip
+    // that this SPI transfer is finished.
+    nrf_gpio_pin_set(BSP_MEMS_CS);
+
+    memcpy(reg_data, &m_rx_buf[1], length);  // skip past NULL first byte in the reply. Will always be 0x00
+
+    return BHY2_INTF_RET_SUCCESS;
 }
+
 
 int8_t bhy2_spi_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     (void)intf_ptr;
 
-    return coines_write_spi(BHY260_CS_PIN, reg_addr, (uint8_t*)reg_data, (uint16_t)length);
+    uint8_t m_tx_buf[length];
+
+    volatile uint32_t * p_spim_event_end = (uint32_t *) nrfx_spim_end_event_get(&m_spi);
+
+    // Initialize buffers
+    memset(m_tx_buf, 0xff, length);
+
+    m_tx_buf[0] = reg_addr;
+    memcpy(m_tx_buf + 1, reg_data, length);
+
+    m_tx_buf[0] = reg_addr;
+
+    nrfx_spim_xfer_desc_t xfer_desc = NRFX_SPIM_XFER_TX(m_tx_buf, length + 1);
+
+    int err_code = nrfx_spim_xfer(&m_spi, &xfer_desc, NRFX_SPIM_FLAG_NO_XFER_EVT_HANDLER);
+    APP_ERROR_CHECK(err_code);
+
+    if (err_code == NRF_SUCCESS)
+    {
+      while (*p_spim_event_end == 0)
+                {};
+      *p_spim_event_end = 0; 
+    }
+    // The driver doesn't release the ss_pin
+    // So we need to do it ourselves here to tell the chip
+    // that this SPI transfer is finished.
+    nrf_gpio_pin_set(BSP_MEMS_CS);
+
+    return BHY2_INTF_RET_SUCCESS;
 }
 
+// Not implemented
 int8_t bhy2_i2c_read(uint8_t reg_addr, uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     (void)intf_ptr;
 
-    return coines_read_i2c(0x28, reg_addr, reg_data, (uint16_t)length);
 }
 
+// Not implemented
 int8_t bhy2_i2c_write(uint8_t reg_addr, const uint8_t *reg_data, uint32_t length, void *intf_ptr)
 {
     (void)intf_ptr;
 
-    return coines_write_i2c(0x28, reg_addr, (uint8_t*)reg_data, (uint16_t)length);
 }
 
 void bhy2_delay_us(uint32_t us, void *private_data)
 {
     (void)private_data;
-    coines_delay_usec(us);
+    nrf_delay_us(us);
 }
 
 char* get_sensor_error_text(uint8_t sensor_error)
