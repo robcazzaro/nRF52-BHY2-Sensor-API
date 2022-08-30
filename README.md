@@ -10,17 +10,16 @@ BHI260AB connected to BMM150 via I2C, as the Shuttle board
 
 Need to define the following #define with the nRF52 GPIO pin, then connect it to the following BHI260 pins
 
-| #define       | BHI260 pin    |
-| ------------- | ------------- |
-| BSP_MEMS_CS   | HCSB pin 34   |
-| Content Cell  | Content Cell  |
+| #define       | BHI260 pin   |
+| ------------- | ------------ |
+| BSP_MEMS_CS   | HCSB pin 34  |
+| BSP_SPI_CLK   | HSCX pin 33  |
+| BSP_SPI_MISO  | HSDO pin 32  |
+| BSP_SPI_MOSI  | HSDX pin 11  |
+| BSP_MEMS_INT  | HIRQ pin 10  |
+| BSP_MEMS_nRESET | HSDX pin 9   |
      
- -> HCSB
-BSP_SPI_MISO;
-BSP_SPI_MOSI;
-BSP_SPI_CLK;
-BSP_MEMS_INT
-
+# Ported code
 BHY2* libraries are unchanged, the only ported portions are common.c/h and the euler.c example. Should be relatively easy to port other examples, with the exclusion of the CLI.
 
 Please note that you will need to add the BHY2* files and common.c/h to a project, and add the necessary files to boot your board. If using one of Nordic's SDK boards, you could use the blinky example as starting point, and add the code in euler.c into main.c. Euler.c is written to never exit and use the NRF_LOG function to print euler angles once per second. The code is interrupt driven, and will need to have the Bosch INT pin properly connected to trigger the GPIOTE handler for parsing
