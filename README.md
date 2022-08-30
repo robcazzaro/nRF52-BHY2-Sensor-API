@@ -2,9 +2,24 @@
 
 (WORK IN PROGRESS DO NOT USE YET)
 
-Orignal code by Bosch (https://github.com/BoschSensortec/BHY2-Sensor-API), ported to the Nordic nRF5 SDK version 17.1.0. Should work on any nRF5 SDK version, and has been tested on a custom nRF52840 board with the following connections
+Orignal code by Bosch (https://github.com/BoschSensortec/BHY2-Sensor-API), ported to the Nordic nRF5 SDK version 17.1.0. Should work on any nRF5 SDK version, and has been tested on a custom nRF52840 board 
 
-(work in progress)
+# BHI260 connections
+
+BHI260AB connected to BMM150 via I2C, as the Shuttle board
+
+Need to define the following #define with the nRF52 GPIO pin, then connect it to the following BHI260 pins
+
+| #define       | BHI260 pin    |
+| ------------- | ------------- |
+| BSP_MEMS_CS   | HCSB pin 34   |
+| Content Cell  | Content Cell  |
+     
+ -> HCSB
+BSP_SPI_MISO;
+BSP_SPI_MOSI;
+BSP_SPI_CLK;
+BSP_MEMS_INT
 
 BHY2* libraries are unchanged, the only ported portions are common.c/h and the euler.c example. Should be relatively easy to port other examples, with the exclusion of the CLI.
 
