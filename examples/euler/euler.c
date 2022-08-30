@@ -5,7 +5,7 @@
  * Bosch BHY2 libraries ported to nRF5 SDK (17.1.0)
  *
  *
- *
+ * 
  *
  * Copyright (c) 2020 Bosch Sensortec GmbH. All rights reserved.
  *
