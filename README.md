@@ -1,6 +1,8 @@
 # BHI260AP/BHI260AB/BHA260AB Sensor API, ported to Nordic nRF5 SDK (17.1.0)
 
-Orignal code by Bosch (https://github.com/BoschSensortec/BHY2-Sensor-API), ported to the Nordic nRF5 SDK version 17.1.0. Should work on any nRF5 SDK version, and has been tested on a custom nRF52840 board, but should work on any nRF52 device
+Orignal code by Bosch (https://github.com/BoschSensortec/BHY2-Sensor-API), ported to the **Nordic nRF5 SDK** version 17.1.0. Should work on any nRF5 SDK version, and has been tested on a custom nRF52840 board, but should work on any nRF52 device
+
+If you are using the **nRF Connect SDK** instead, please see https://github.com/dariosortino/nRFConnect-BHY2-Sensor-API
 
 # BHI260 connections
 
